@@ -7,58 +7,32 @@ import { Auth } from './components/Auth';
 import { Dashboard } from './components/Dashboard';
 import { Landing } from './components/Landing';
 
-type AppState = 'landing' | 'auth' | 'activation' | 'dashboard';
+type AppState = 'landing' | 'auth' | 'dashboard';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [appState, setAppState] = useState<AppState>('landing');
-  const [isApiKeyActive, setIsApiKeyActive] = useState(false);
 
   useEffect(() => {
-    const checkApiKey = async () => {
-      const hasSelected = await (window as any).aistudio?.hasSelectedApiKey();
-      const hasEnvKey = !!process.env.API_KEY;
-      setIsApiKeyActive(hasSelected || hasEnvKey);
-    };
-    checkApiKey();
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
         });
-        
-        // If logged in but no API key, go to activation
-        if (!isApiKeyActive && !!process.env.API_KEY === false) {
-          setAppState('activation');
-        } else {
-          setAppState('dashboard');
-        }
+        setAppState('dashboard');
       } else {
         setUser(null);
-        if (appState === 'dashboard' || appState === 'activation') {
+        if (appState === 'dashboard') {
           setAppState('landing');
         }
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [appState, isApiKeyActive]);
-
-  const handleActivateKey = async () => {
-    try {
-      await (window as any).aistudio?.openSelectKey();
-      setIsApiKeyActive(true);
-      if (user) setAppState('dashboard');
-    } catch (err) {
-      console.error("Key selection failed:", err);
-    }
-  };
+  }, [appState]);
 
   if (loading) {
     return (
@@ -130,28 +104,6 @@ const App: React.FC = () => {
       <main className="flex-grow">
         {appState === 'landing' && <Landing onGetStarted={() => setAppState('auth')} />}
         {appState === 'auth' && <Auth onBack={() => setAppState('landing')} />}
-        {appState === 'activation' && (
-          <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 animate-in fade-in slide-in-from-bottom-8">
-            <div className="w-full max-w-lg p-10 md:p-16 liquid-glass ios-squircle shadow-2xl text-center">
-              <div className="w-20 h-20 bg-indigo-600/10 text-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-10">
-                <svg fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-10 h-10"><path d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" /></svg>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-6 tracking-tighter">Core Activation</h2>
-              <p className="text-slate-500 font-bold text-sm md:text-base mb-10 leading-relaxed">
-                To utilize Gemini 3 Neural Engines, you must link an API key from a paid Google Cloud Project.
-              </p>
-              <button 
-                onClick={handleActivateKey}
-                className="w-full py-5 bg-indigo-600 text-white font-black text-lg rounded-[2rem] shadow-2xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all"
-              >
-                Link Project Identity
-              </button>
-              <p className="mt-8 text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
-                Configuration required per <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-indigo-600 underline">Billing Protocols</a>
-              </p>
-            </div>
-          </div>
-        )}
         {appState === 'dashboard' && user && <Dashboard user={user} />}
       </main>
 

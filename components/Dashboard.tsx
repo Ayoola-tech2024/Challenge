@@ -61,9 +61,9 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
   };
 
   const handleKeySelectionError = async () => {
-    if (confirm("AI Core Identity Mismatch. Would you like to re-link your Project API Key?")) {
+    if (confirm("Neural Engine Offline: No valid API Key detected. Would you like to link your Google AI Studio project now?")) {
       await (window as any).aistudio?.openSelectKey();
-      window.location.reload();
+      setError("Identity linked. Please try analyzing your notes again.");
     }
   };
 
@@ -111,8 +111,8 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
       loadHistory();
     } catch (err: any) {
       const msg = err.message || "";
-      if (msg.includes("API Key") || msg.includes("entity was not found")) {
-        setError("Neural connection rejected: Invalid or missing API Key.");
+      if (msg.includes("API Key") || msg.includes("entity was not found") || msg.includes("apiKey must be set")) {
+        setError("Neural connection rejected: Missing API Key.");
         handleKeySelectionError();
       } else {
         setError(msg || "Intelligence Core Timeout.");
@@ -207,7 +207,12 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
             <div className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
             </div>
-            <span className="text-red-600 font-black text-xs md:text-sm uppercase tracking-widest">{error}</span>
+            <div className="flex flex-col">
+              <span className="text-red-600 font-black text-xs md:text-sm uppercase tracking-widest">{error}</span>
+              {error.includes("Key") && (
+                <button onClick={handleKeySelectionError} className="text-indigo-600 text-[10px] font-black uppercase tracking-widest mt-1 text-left underline">Link Key Now</button>
+              )}
+            </div>
           </div>
           <button onClick={() => setError(null)} className="text-red-400 p-2 hover:bg-red-500/10 rounded-full shrink-0"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
         </div>
