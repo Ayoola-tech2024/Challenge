@@ -60,13 +60,6 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     setHistory(data);
   };
 
-  const handleKeySelectionError = async () => {
-    if (confirm("Neural Engine Offline: No valid API Key detected. Would you like to link your Google AI Studio project now?")) {
-      await (window as any).aistudio?.openSelectKey();
-      setError("Identity linked. Please try analyzing your notes again.");
-    }
-  };
-
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     if (confirm("Permanently delete this study record?")) {
@@ -110,13 +103,8 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
       setUserChoices({});
       loadHistory();
     } catch (err: any) {
-      const msg = err.message || "";
-      if (msg.includes("API Key") || msg.includes("entity was not found") || msg.includes("apiKey must be set")) {
-        setError("Neural connection rejected: Missing API Key.");
-        handleKeySelectionError();
-      } else {
-        setError(msg || "Intelligence Core Timeout.");
-      }
+      console.error("Processing error:", err);
+      setError(err.message || "Intelligence Core Timeout. Verify that the API_KEY is correctly configured.");
     } finally {
       setProcessing(false);
       setProcessStep('');
@@ -209,9 +197,6 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
             </div>
             <div className="flex flex-col">
               <span className="text-red-600 font-black text-xs md:text-sm uppercase tracking-widest">{error}</span>
-              {error.includes("Key") && (
-                <button onClick={handleKeySelectionError} className="text-indigo-600 text-[10px] font-black uppercase tracking-widest mt-1 text-left underline">Link Key Now</button>
-              )}
             </div>
           </div>
           <button onClick={() => setError(null)} className="text-red-400 p-2 hover:bg-red-500/10 rounded-full shrink-0"><svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></button>
@@ -293,136 +278,4 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
                   </div>
                 )}
               </div>
-            )}
-          </div>
-
-          <div className="lg:col-span-4 space-y-6 md:space-y-10">
-             <div className="bg-slate-900 p-8 md:p-10 rounded-[2rem] md:ios-squircle shadow-2xl text-white relative overflow-hidden">
-                <h3 className="text-xl md:text-2xl font-black mb-6 md:mb-8 tracking-tight">Active Protocol</h3>
-                <div className="space-y-8 md:space-y-10">
-                   {[
-                     { step: "01", text: "Select assessment intensity" },
-                     { step: "02", text: "Upload document or paste notes" },
-                     { step: "03", text: "AI distillates core knowledge" },
-                     { step: "04", text: "Interactive CBT Matrix" }
-                   ].map((s, i) => (
-                     <div key={i} className="flex gap-4 md:gap-6 items-center">
-                        <span className="text-indigo-500 font-black text-xs tracking-widest">{s.step}</span>
-                        <p className="text-slate-400 font-bold text-xs md:text-sm">{s.text}</p>
-                     </div>
-                   ))}
-                </div>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {session && (
-        <div className="space-y-12 md:space-y-16 animate-in fade-in slide-in-from-bottom-12 duration-1000">
-           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-              <button onClick={handleCloseSession} className="w-12 h-12 md:w-16 md:h-16 flex items-center justify-center liquid-glass rounded-2xl md:rounded-3xl shadow-2xl hover:scale-110 transition-all text-slate-500 hover:text-indigo-600">
-                 <svg fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-6 h-6 md:w-8 md:h-8"><path d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
-              </button>
-              <div className="sm:text-right w-full">
-                <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter line-clamp-1">{session.title}</h2>
-                <div className="flex sm:justify-end gap-3 mt-4">
-                  <button onClick={() => downloadSummaryPDF(session)} className="flex-1 sm:flex-none px-4 py-2 bg-indigo-50 text-indigo-600 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100">Export Summary</button>
-                  <button onClick={() => downloadQuizPDF(session)} className="flex-1 sm:flex-none px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100">Export Quiz</button>
-                </div>
-              </div>
-           </div>
-
-           <div className="grid lg:grid-cols-12 gap-8 md:gap-12">
-             <div className="lg:col-span-6 space-y-10 md:space-y-12">
-                <section className="liquid-glass p-8 md:p-12 ios-squircle shadow-2xl">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-500 mb-8 md:mb-10">Executive Summary</h3>
-                   <p className="text-xl md:text-2xl text-slate-800 leading-relaxed font-black tracking-tight">{session.summary}</p>
-                </section>
-
-                <section className="liquid-glass p-8 md:p-12 ios-squircle shadow-2xl">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-500 mb-10 md:mb-12">Neural Keypoints</h3>
-                   <div className="grid gap-8 md:gap-10">
-                     {session.keyPoints?.map((p, i) => (
-                       <div key={i} className="flex gap-6 md:gap-10 items-start group">
-                         <div className="mt-1.5 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black shrink-0 text-xs shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-all">{i + 1}</div>
-                         <span className="text-xl md:text-2xl text-slate-700 font-bold leading-snug">{p}</span>
-                       </div>
-                     ))}
-                   </div>
-                </section>
-             </div>
-
-             <div className="lg:col-span-6 space-y-10 md:space-y-12">
-                <section className="bg-slate-900 text-white p-8 md:p-12 ios-squircle shadow-2xl">
-                   <div className="flex items-center justify-between mb-10 md:mb-12">
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400">Logic Assessment</h3>
-                   </div>
-                   <div className="space-y-12">
-                     {session.questions.map((q, idx) => {
-                       const isRevealed = revealedAnswers[idx];
-                       return (
-                         <div key={idx} className="space-y-6">
-                           <p className="text-xl md:text-2xl font-black leading-tight tracking-tight">{q.question}</p>
-                           <div className="grid gap-3">
-                             {q.options.map((opt, oIdx) => (
-                               <button 
-                                 key={oIdx} 
-                                 disabled={isRevealed}
-                                 onClick={() => handleOptionSelect(idx, oIdx)}
-                                 className={`w-full text-left p-4 rounded-2xl border-2 transition-all font-bold ${userChoices[idx] === oIdx ? (isRevealed ? (oIdx === q.correctIndex ? 'bg-emerald-500 border-emerald-500' : 'bg-red-500 border-red-500') : 'border-indigo-500 bg-indigo-500/10') : 'border-white/5 bg-white/5'}`}
-                               >
-                                 {opt}
-                               </button>
-                             ))}
-                           </div>
-                           {userChoices[idx] !== undefined && !isRevealed && (
-                             <button onClick={() => setRevealedAnswers(p => ({...p, [idx]: true}))} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Validate</button>
-                           )}
-                           {isRevealed && <div className="p-4 bg-white/5 rounded-xl text-slate-400 italic text-sm">{q.explanation}</div>}
-                         </div>
-                       );
-                     })}
-                   </div>
-                </section>
-             </div>
-           </div>
-        </div>
-      )}
-
-      {activeTab === 'vault' && !session && (
-        <div className="space-y-8 md:space-y-12">
-           <div className="flex items-center justify-between">
-              <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter">Study Vault</h2>
-              <button onClick={handleClearVault} className="px-4 py-2 bg-red-50 text-red-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-red-100">Clear Archive</button>
-           </div>
-           {history.length === 0 ? (
-             <div className="liquid-glass p-20 text-center shadow-2xl ios-squircle">
-                <p className="text-slate-400 font-black text-xl uppercase tracking-widest opacity-60">Archive records empty.</p>
-             </div>
-           ) : (
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-               {history.map((item) => (
-                 <div key={item.id} onClick={() => setSession(item)} className="liquid-glass p-8 ios-squircle shadow-xl hover:shadow-2xl hover:-translate-y-2 transition-all cursor-pointer group relative">
-                    <button 
-                      onClick={(e) => handleDeleteSession(e, item.id!)}
-                      className="absolute top-4 right-4 p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <svg fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-4 h-4"><path d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                    <div className="flex justify-between mb-6">
-                       <span className="text-indigo-600 text-[9px] font-black uppercase tracking-widest">{new Date(item.createdAt).toLocaleDateString()}</span>
-                       {item.id?.startsWith('local_') && <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-2 py-1 rounded-full uppercase">Local Cache</span>}
-                    </div>
-                    <h3 className="text-2xl font-black text-slate-800 line-clamp-2 leading-tight tracking-tight mb-8">{item.title}</h3>
-                    <div className="pt-6 border-t border-slate-200/50 flex justify-between items-center text-slate-400 text-[9px] font-black uppercase tracking-widest">
-                       <span>{item.sourceType} • {item.questions?.length || 0} Qs</span>
-                    </div>
-                 </div>
-               ))}
-             </div>
-           )}
-        </div>
-      )}
-    </div>
-  );
-};
+            

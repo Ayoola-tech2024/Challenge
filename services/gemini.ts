@@ -16,7 +16,7 @@ export const analyzeStudyMaterial = async (text: string, questionCount: number =
   questions: any[] 
 }> => {
   // Always use process.env.API_KEY directly for initialization as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -76,7 +76,7 @@ export const analyzeStudyMaterial = async (text: string, questionCount: number =
 
 export const ocrImage = async (base64Data: string, mimeType: string): Promise<string> => {
   // Always use process.env.API_KEY directly for initialization as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
