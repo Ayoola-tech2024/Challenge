@@ -6,7 +6,6 @@ import { GoogleGenAI, Type } from "@google/genai";
  */
 const sanitizeJsonResponse = (text: string): string => {
   if (!text) return "";
-  // Removes ```json ... ``` and any leading/trailing whitespace
   return text.replace(/```json\n?|```/g, '').trim();
 };
 
@@ -16,27 +15,28 @@ export const analyzeStudyMaterial = async (text: string): Promise<{
   insights: string, 
   questions: any[] 
 }> => {
-  if (!process.env.API_KEY) {
+  const apiKey = (window as any).process?.env?.API_KEY || (process as any).env?.API_KEY;
+  if (!apiKey) {
     throw new Error("System Error: AI credentials missing. Please refresh or contact admin.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-3-flash-preview',
     contents: [{
       role: 'user',
       parts: [{
-        text: `Analyze this material and return a structured JSON report.
+        text: `Perform an academic analysis on this content and return a structured JSON report.
         
         INPUT MATERIAL:
         ${text}`
       }]
     }],
     config: {
-      systemInstruction: "You are an Elite Academic Intelligence Agent. Extract the core summary, 5 key points, 1 deep insight, and 5 multiple choice questions. Format: JSON only. No prose. No conversational filler.",
+      systemInstruction: "You are an Elite Academic Intelligence Agent. Extract a summary, 5 key points, 1 mnemonic insight, and 5 MCQ practice questions. Format as JSON. No conversational text.",
       responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 0 },
+      // Removed thinkingConfig because explicit 0 value can trigger errors on some models
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -66,7 +66,7 @@ export const analyzeStudyMaterial = async (text: string): Promise<{
 
   const outputText = response.text;
   if (!outputText) {
-    throw new Error("The Intelligence Core failed to synthesize a report. The content may be too short or complex.");
+    throw new Error("The Intelligence Core failed to synthesize a report.");
   }
 
   try {
@@ -74,14 +74,15 @@ export const analyzeStudyMaterial = async (text: string): Promise<{
     return JSON.parse(cleanJson);
   } catch (e) {
     console.error("Critical JSON failure:", e, "Payload:", outputText);
-    throw new Error("Decoding Error: The system produced a non-standard report. Please retry.");
+    throw new Error("Decoding Error: The system produced a non-standard report.");
   }
 };
 
 export const ocrImage = async (base64Data: string, mimeType: string): Promise<string> => {
-  if (!process.env.API_KEY) throw new Error("Credentials missing.");
+  const apiKey = (window as any).process?.env?.API_KEY || (process as any).env?.API_KEY;
+  if (!apiKey) throw new Error("Credentials missing.");
   
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
@@ -89,7 +90,7 @@ export const ocrImage = async (base64Data: string, mimeType: string): Promise<st
       role: 'user',
       parts: [
         { inlineData: { data: base64Data, mimeType } },
-        { text: "Act as a high-precision OCR engine. Transcribe every word in this image exactly." }
+        { text: "OCR transcription only. Return raw text found in image." }
       ]
     }]
   });

@@ -18,7 +18,6 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
   const [history, setHistory] = useState<StudySession[]>([]);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<number, boolean>>({});
   
-  // Security specific states
   const [isVerified, setIsVerified] = useState(auth.currentUser?.emailVerified || false);
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sent' | 'error'>('idle');
@@ -63,16 +62,16 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     e.preventDefault();
     const cleanText = textInput.trim();
     if (cleanText.length < 50) {
-      setError("Data Density Too Low: Provide more detailed notes for high-quality analysis.");
+      setError("Notes too short for high-fidelity analysis (min 50 chars).");
       return;
     }
 
     setProcessing(true);
-    setProcessStep('Synchronizing with Intelligence Core...');
+    setProcessStep('Connecting to Neural Core...');
     setError(null);
     try {
       const result = await analyzeStudyMaterial(cleanText);
-      setProcessStep('Storing results in Vault...');
+      setProcessStep('Updating Study Vault...');
       const newSession: StudySession = {
         userId: user.uid,
         sourceType: 'text',
@@ -86,9 +85,10 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
       const id = await saveStudySession(newSession);
       setSession({ ...newSession, id });
       setRevealedAnswers({});
+      loadHistory(); // Refresh history
     } catch (err: any) {
       console.error("Process Failure:", err);
-      setError(err.message || "Intelligence Core Timeout. Please try again.");
+      setError(err.message || "Intelligence Core Timeout.");
     } finally {
       setProcessing(false);
       setProcessStep('');
@@ -100,7 +100,7 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     if (!file) return;
 
     setProcessing(true);
-    setProcessStep('Extracting data from file...');
+    setProcessStep('Processing document logic...');
     setError(null);
     try {
       let text = "";
@@ -110,18 +110,15 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
         const base64 = await fileToBase64(file);
         text = await ocrImage(base64, file.type);
       } else {
-        throw new Error("Invalid Format: Use PDF or Image files.");
+        throw new Error("Unsupported format. Use PDF or Images.");
       }
 
-      const finalContent = text.trim();
-      if (!finalContent || finalContent.length < 20) {
-        throw new Error("Legibility Error: Not enough text extracted from document.");
-      }
+      if (text.trim().length < 20) throw new Error("Legibility error: Text extraction failed.");
 
-      setProcessStep('Distilling knowledge patterns...');
-      const result = await analyzeStudyMaterial(finalContent);
+      setProcessStep('Synthesizing academic patterns...');
+      const result = await analyzeStudyMaterial(text);
       
-      setProcessStep('Finalizing study report...');
+      setProcessStep('Finalizing vault record...');
       const newSession: StudySession = {
         userId: user.uid,
         sourceType: file.type === 'application/pdf' ? 'pdf' : 'image',
@@ -135,8 +132,9 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
       const id = await saveStudySession(newSession);
       setSession({ ...newSession, id });
       setRevealedAnswers({});
+      loadHistory();
     } catch (err: any) {
-      console.error("Deep Scan Error:", err);
+      console.error("Upload Failure:", err);
       setError(err.message || "Neural extraction failed.");
     } finally {
       setProcessing(false);
@@ -350,7 +348,12 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
 
       {activeTab === 'vault' && !session && (
         <div className="space-y-12">
-           <h2 className="text-5xl font-black text-slate-900 tracking-tighter">Study Vault</h2>
+           <div className="flex items-center justify-between">
+              <h2 className="text-5xl font-black text-slate-900 tracking-tighter">Study Vault</h2>
+              <div className="px-4 py-2 liquid-glass ios-squircle text-[9px] font-black uppercase tracking-widest text-indigo-500 border-indigo-500/20">
+                Hybrid Cloud Mode Enabled
+              </div>
+           </div>
            {history.length === 0 ? (
              <div className="liquid-glass p-32 ios-squircle text-center shadow-2xl">
                 <p className="text-slate-400 font-black text-2xl uppercase tracking-widest opacity-60">Archive records empty.</p>
@@ -359,7 +362,12 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
                {history.map((item) => (
                  <div key={item.id} onClick={() => setSession(item)} className="liquid-glass p-10 ios-squircle shadow-xl hover:shadow-2xl hover:-translate-y-3 transition-all cursor-pointer group">
-                    <span className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.4em] mb-8 block">{new Date(item.createdAt).toLocaleDateString()}</span>
+                    <div className="flex justify-between items-start mb-8">
+                       <span className="text-indigo-600 text-[10px] font-black uppercase tracking-[0.4em] block">{new Date(item.createdAt).toLocaleDateString()}</span>
+                       {item.id?.startsWith('local_') && (
+                          <span className="text-[8px] font-black bg-slate-100 text-slate-400 px-2 py-1 rounded-full uppercase tracking-tighter">Local only</span>
+                       )}
+                    </div>
                     <h3 className="text-3xl font-black text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors line-clamp-2 leading-tight tracking-tight">{item.title}</h3>
                     <div className="mt-12 pt-10 border-t border-slate-200/50 flex justify-between items-center text-slate-400 font-black text-[10px] uppercase tracking-widest">
                        <span>{item.sourceType.toUpperCase()} Record</span>

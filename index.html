@@ -53,11 +53,16 @@
       100% { transform: translateY(0px); }
     }
   </style>
+<script>
+  // Shim for process.env to prevent ReferenceErrors in the browser
+  window.process = window.process || { env: {} };
+</script>
 <script type="importmap">
 {
   "imports": {
     "firebase/": "https://esm.sh/firebase@^12.8.0/",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react-dom/client": "https://esm.sh/react-dom@^19.2.4/client",
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
     "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
@@ -68,5 +73,6 @@
 <body class="text-slate-900 min-h-screen">
   <div class="mesh-gradient"></div>
   <div id="root"></div>
+  <script type="module" src="./index.js"></script>
 </body>
 </html>
