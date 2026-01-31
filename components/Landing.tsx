@@ -85,7 +85,7 @@ export const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
       </section>
       
       <div className="py-20 text-center bg-white border-t border-slate-100">
-         <p className="text-slate-400 font-black text-xs uppercase tracking-[0.6em]">Built by DamiTechs</p>
+         <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em]">Developed by Ayoola Damisile • Powered by Damitechs</p>
       </div>
     </div>
   );

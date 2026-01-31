@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  sendEmailVerification,
   signInWithPopup
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
@@ -18,7 +17,6 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [verificationSent, setVerificationSent] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setError('');
@@ -27,7 +25,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError("Secure login failed. Please ensure popups are enabled.");
+        setError("Secure login failed. Please check browser permissions.");
       }
       setLoading(false);
     }
@@ -45,32 +43,22 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
     setLoading(true);
     try {
       if (isLogin) {
-        // App.tsx handles the verification check after login
         await signInWithEmailAndPassword(auth, email, password);
       } else {
-        // 1. Create the user identity
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // 2. Immediately dispatch the verification email
-        try {
-          await sendEmailVerification(userCredential.user);
-          setVerificationSent(true);
-        } catch (emailErr: any) {
-          console.error("Verification dispatch failed:", emailErr);
-          setError("Account created, but verification link failed to send. You can resend it from the next screen.");
-          // We don't block progress here because they can resend from the pending screen
-          setVerificationSent(true);
-        }
+        await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch (err: any) {
       console.error("Auth Failure:", err.code);
       switch (err.code) {
         case 'auth/email-already-in-use':
-          setError("Account identifier already exists in our neural network.");
+          setError("This identity already exists in our neural network.");
           break;
         case 'auth/invalid-credential':
         case 'auth/wrong-password':
-          setError("Credential mismatch. Please re-verify your identity.");
+          setError("Credential mismatch: The password provided is incorrect for this account.");
+          break;
+        case 'auth/user-not-found':
+          setError("Account not detected. Please verify your email or create a new identity.");
           break;
         case 'auth/too-many-requests':
           setError("System locked due to excessive failed attempts. Please standby.");
@@ -79,43 +67,19 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
           setError("Please provide a valid global identifier (email).");
           break;
         default:
-          setError("Uplink failed. Please verify your data connection.");
+          setError("Uplink failed. Please verify your data connection and Firebase configuration.");
       }
       setLoading(false);
     }
   };
 
-  if (verificationSent) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 px-4 animate-in fade-in slide-in-from-bottom-8">
-        <div className="w-full max-w-md p-10 liquid-glass ios-squircle text-center shadow-2xl">
-          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-pulse shadow-inner">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-10 h-10">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-            </svg>
-          </div>
-          <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Identity Dispatched</h2>
-          <p className="text-slate-600 mb-10 leading-relaxed font-medium">
-            A confirmation link is now in your inbox at <span className="font-bold text-indigo-600">{email}</span>. Click it to activate your operative status.
-          </p>
-          <button
-            onClick={() => { setVerificationSent(false); setIsLogin(true); setError(''); }}
-            className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl transition-all shadow-xl shadow-indigo-100"
-          >
-            Back to Portal Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 animate-in fade-in slide-in-from-bottom-8">
-      <div className="w-full max-w-md p-10 liquid-glass ios-squircle shadow-2xl relative">
+      <div className="w-full max-w-md p-6 md:p-10 liquid-glass ios-squircle shadow-2xl relative">
         {onBack && (
           <button 
             onClick={onBack}
-            className="absolute top-8 left-8 text-slate-400 hover:text-slate-800 transition-all p-2 rounded-2xl hover:bg-white/50"
+            className="absolute top-6 left-6 md:top-8 md:left-8 text-slate-400 hover:text-slate-800 transition-all p-2 rounded-2xl hover:bg-white/50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
@@ -124,10 +88,10 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
         )}
         
         <div className="text-center mb-10 pt-4">
-          <h2 className="text-4xl font-black text-slate-900 mb-3 tracking-tighter">
+          <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-3 tracking-tighter">
             {isLogin ? 'Sign In' : 'Create Identity'}
           </h2>
-          <p className="text-slate-500 font-bold text-sm">
+          <p className="text-slate-500 font-bold text-xs md:text-sm">
             {isLogin ? 'Enter your credentials to continue' : 'Join the elite tier of scholars today'}
           </p>
         </div>
@@ -147,7 +111,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             <input
               type="email"
               required
-              className="w-full px-6 py-5 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner placeholder-slate-300"
+              className="w-full px-6 py-4 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner"
               placeholder="user@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -158,7 +122,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             <input
               type="password"
               required
-              className="w-full px-6 py-5 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner placeholder-slate-300"
+              className="w-full px-6 py-4 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -167,25 +131,21 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg rounded-[2rem] transition-all disabled:opacity-50 shadow-2xl shadow-indigo-300 active:scale-95"
+            className="w-full py-4 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg rounded-[2rem] transition-all disabled:opacity-50 shadow-2xl shadow-indigo-300 active:scale-95"
           >
             {loading ? 'Initializing...' : (isLogin ? 'Authorize Entry' : 'Register Identity')}
           </button>
         </form>
 
         <div className="relative my-10">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-200/50"></div>
-          </div>
-          <div className="relative flex justify-center text-[10px] uppercase">
-            <span className="liquid-glass px-4 py-1 rounded-full text-slate-400 font-black tracking-widest">Or Link With</span>
-          </div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200/50"></div></div>
+          <div className="relative flex justify-center text-[10px] uppercase"><span className="liquid-glass px-4 py-1 rounded-full text-slate-400 font-black tracking-widest">Or Link With</span></div>
         </div>
 
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 py-5 px-4 bg-white/80 border border-white/80 hover:bg-white text-slate-700 font-bold rounded-3xl transition-all shadow-lg hover:-translate-y-1 active:scale-95 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-3 py-4 px-4 bg-white/80 border border-white/80 hover:bg-white text-slate-700 font-bold rounded-3xl transition-all shadow-lg hover:-translate-y-1 active:scale-95 disabled:opacity-50"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -208,7 +168,6 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
           </p>
         </div>
       </div>
-      <p className="mt-8 text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] opacity-60">Engineered by DamiTechs</p>
     </div>
   );
 };

@@ -9,34 +9,30 @@ const sanitizeJsonResponse = (text: string): string => {
   return text.replace(/```json\n?|```/g, '').trim();
 };
 
-export const analyzeStudyMaterial = async (text: string): Promise<{ 
+export const analyzeStudyMaterial = async (text: string, questionCount: number = 10): Promise<{ 
   summary: string, 
   keyPoints: string[], 
   insights: string, 
   questions: any[] 
 }> => {
-  const apiKey = (window as any).process?.env?.API_KEY || (process as any).env?.API_KEY;
-  if (!apiKey) {
-    throw new Error("System Error: AI credentials missing. Please refresh or contact admin.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // Always use process.env.API_KEY directly for initialization as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: [{
       role: 'user',
       parts: [{
-        text: `Perform an academic analysis on this content and return a structured JSON report.
+        text: `Perform a comprehensive academic analysis on this content. 
+        Generate exactly ${questionCount} multiple choice questions.
         
         INPUT MATERIAL:
         ${text}`
       }]
     }],
     config: {
-      systemInstruction: "You are an Elite Academic Intelligence Agent. Extract a summary, 5 key points, 1 mnemonic insight, and 5 MCQ practice questions. Format as JSON. No conversational text.",
+      systemInstruction: `You are an Elite Academic Intelligence Agent. Extract a high-level summary, 5-10 key points, 1 deep mnemonic insight, and EXACTLY ${questionCount} multiple-choice practice questions with detailed explanations. Format the entire response as a single valid JSON object. Ensure questions range from foundational to advanced application level. Do not include any text outside the JSON structure.`,
       responseMimeType: "application/json",
-      // Removed thinkingConfig because explicit 0 value can trigger errors on some models
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -74,15 +70,13 @@ export const analyzeStudyMaterial = async (text: string): Promise<{
     return JSON.parse(cleanJson);
   } catch (e) {
     console.error("Critical JSON failure:", e, "Payload:", outputText);
-    throw new Error("Decoding Error: The system produced a non-standard report.");
+    throw new Error("Decoding Error: The system produced a non-standard report. This often happens with very large request counts. Try reducing question count.");
   }
 };
 
 export const ocrImage = async (base64Data: string, mimeType: string): Promise<string> => {
-  const apiKey = (window as any).process?.env?.API_KEY || (process as any).env?.API_KEY;
-  if (!apiKey) throw new Error("Credentials missing.");
-  
-  const ai = new GoogleGenAI({ apiKey });
+  // Always use process.env.API_KEY directly for initialization as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
@@ -90,7 +84,7 @@ export const ocrImage = async (base64Data: string, mimeType: string): Promise<st
       role: 'user',
       parts: [
         { inlineData: { data: base64Data, mimeType } },
-        { text: "OCR transcription only. Return raw text found in image." }
+        { text: "Act as a high-precision document scanner. Extract all legible text from this image and return it exactly as it appears. Maintain logical paragraph structures." }
       ]
     }]
   });

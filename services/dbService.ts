@@ -1,45 +1,120 @@
 
-import { collection, addDoc, query, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import { StudySession } from "../types";
 
-const LOCAL_STORAGE_KEY = 'exampro_local_vault';
+const VAULT_KEY_PREFIX = 'exampro_vault_v3_';
+const ACTIVE_SESSION_KEY_PREFIX = 'exampro_active_session_';
 
-// Helper to manage local fallback
-const getLocalHistory = (): StudySession[] => {
+const getVaultKey = (userId: string) => `${VAULT_KEY_PREFIX}${userId}`;
+const getActiveKey = (userId: string) => `${ACTIVE_SESSION_KEY_PREFIX}${userId}`;
+
+export const getLocalHistory = (userId: string): StudySession[] => {
   try {
-    const data = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const data = localStorage.getItem(getVaultKey(userId));
     return data ? JSON.parse(data) : [];
   } catch (e) {
     return [];
   }
 };
 
-const saveToLocal = (session: StudySession) => {
-  const history = getLocalHistory();
-  const newSession = { ...session, id: `local_${Date.now()}`, createdAt: Date.now() };
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([newSession, ...history].slice(0, 20)));
-  return newSession.id;
+const saveToLocalHistory = (userId: string, session: StudySession) => {
+  const history = getLocalHistory(userId);
+  // Match by ID or by exact creation timestamp + title
+  const existingIndex = history.findIndex(s => 
+    (session.id && s.id === session.id) || 
+    (s.createdAt === session.createdAt && s.title === session.title)
+  );
+  
+  let updatedHistory = [...history];
+  if (existingIndex > -1) {
+    updatedHistory[existingIndex] = { ...updatedHistory[existingIndex], ...session };
+  } else {
+    updatedHistory.unshift(session);
+  }
+
+  updatedHistory = updatedHistory
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 100);
+
+  localStorage.setItem(getVaultKey(userId), JSON.stringify(updatedHistory));
+};
+
+export const saveActiveSessionState = (userId: string, session: StudySession | null) => {
+  if (session) {
+    localStorage.setItem(getActiveKey(userId), JSON.stringify(session));
+  } else {
+    localStorage.removeItem(getActiveKey(userId));
+  }
+};
+
+export const getActiveSessionState = (userId: string): StudySession | null => {
+  try {
+    const data = localStorage.getItem(getActiveKey(userId));
+    return data ? JSON.parse(data) : null;
+  } catch (e) {
+    return null;
+  }
 };
 
 export const saveStudySession = async (session: StudySession) => {
+  const localId = session.id || `local_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  const sessionToSave = { ...session, id: localId, createdAt: session.createdAt || Date.now() };
+
+  // 1. Immediate Local Persistance
+  saveToLocalHistory(session.userId, sessionToSave);
+  saveActiveSessionState(session.userId, sessionToSave);
+
+  // 2. Background Sync
   try {
-    // Attempt Cloud Sync
-    const docRef = await addDoc(collection(db, "studySessions"), {
-      ...session,
-      createdAt: Date.now()
-    });
+    const { id, ...dataForCloud } = sessionToSave;
+    const docRef = await addDoc(collection(db, "studySessions"), dataForCloud);
+    
+    // 3. Upgrade local reference to Cloud ID
+    const syncedSession = { ...sessionToSave, id: docRef.id };
+    
+    // Remove the old local-only entry if IDs differ
+    if (localId !== docRef.id) {
+       const history = getLocalHistory(session.userId).filter(s => s.id !== localId);
+       // Fix: use session.userId instead of undefined userId
+       localStorage.setItem(getVaultKey(session.userId), JSON.stringify([syncedSession, ...history]));
+    } else {
+       saveToLocalHistory(session.userId, syncedSession);
+    }
+    
+    saveActiveSessionState(session.userId, syncedSession);
     return docRef.id;
   } catch (error: any) {
-    console.warn("Cloud Sync Permission Denied. Falling back to Local Vault.", error.message);
-    // Fallback to local storage if Firestore permissions fail
-    return saveToLocal(session);
+    console.warn("Offline: Data stored locally for future sync.", error.message);
+    return localId;
+  }
+};
+
+export const deleteStudySession = async (userId: string, sessionId: string) => {
+  // 1. Local Delete
+  const history = getLocalHistory(userId).filter(s => s.id !== sessionId);
+  localStorage.setItem(getVaultKey(userId), JSON.stringify(history));
+  
+  // 2. Clear active if it matches
+  const active = getActiveSessionState(userId);
+  if (active?.id === sessionId) {
+    saveActiveSessionState(userId, null);
+    localStorage.removeItem(`exampro_progress_${userId}`);
+  }
+
+  // 3. Cloud Delete (if it's not a local-only ID)
+  if (!sessionId.startsWith('local_')) {
+    try {
+      await deleteDoc(doc(db, "studySessions", sessionId));
+    } catch (error) {
+      console.error("Cloud deletion failed:", error);
+    }
   }
 };
 
 export const getStudyHistory = async (userId: string): Promise<StudySession[]> => {
-  let cloudHistory: StudySession[] = [];
-  
+  const localData = getLocalHistory(userId);
+
   try {
     const q = query(
       collection(db, "studySessions"),
@@ -47,19 +122,21 @@ export const getStudyHistory = async (userId: string): Promise<StudySession[]> =
     );
     
     const querySnapshot = await getDocs(q);
+    const cloudSessions: StudySession[] = [];
     querySnapshot.forEach((doc) => {
-      cloudHistory.push({ id: doc.id, ...doc.data() } as StudySession);
+      cloudSessions.push({ id: doc.id, ...doc.data() } as StudySession);
     });
-  } catch (error: any) {
-    console.warn("Database Access Restricted. Retrieving Local Vault only.", error.message);
-  }
 
-  // Merge Cloud and Local history, sort by date
-  const localHistory = getLocalHistory();
-  const combined = [...cloudHistory, ...localHistory];
-  
-  return combined
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i) // Deduplicate
-    .slice(0, 15);
+    // Merge cloud data into local storage for caching
+    cloudSessions.forEach(s => saveToLocalHistory(userId, s));
+    return getLocalHistory(userId);
+  } catch (error: any) {
+    return localData; // Fallback to local on connection issues
+  }
+};
+
+export const clearUserVault = (userId: string) => {
+  localStorage.removeItem(getVaultKey(userId));
+  localStorage.removeItem(getActiveKey(userId));
+  localStorage.removeItem(`exampro_progress_${userId}`);
 };
