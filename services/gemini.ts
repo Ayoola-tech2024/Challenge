@@ -15,13 +15,7 @@ export const analyzeStudyMaterial = async (text: string, questionCount: number =
   insights: string, 
   questions: any[] 
 }> => {
-  // Always instantiate right before the call to ensure process.env.API_KEY is available
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("System Alert: Neural Engine API Key not detected. Please verify configuration.");
-  }
-  
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -80,12 +74,7 @@ export const analyzeStudyMaterial = async (text: string, questionCount: number =
 };
 
 export const ocrImage = async (base64Data: string, mimeType: string): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("System Alert: Neural Engine API Key not detected.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
