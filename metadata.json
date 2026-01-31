@@ -1,6 +1,6 @@
 {
   "name": "ExamPro AI",
-  "description": "An AI-powered personal exam prep system that summarizes study materials and generates timed Computer-Based Tests (CBT).",
+  "description": "An AI-powered personal exam prep system that summarizes study materials and generates Computer-Based Tests (CBT).",
   "requestFramePermissions": [
     "camera"
   ]
