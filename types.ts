@@ -1,12 +1,4 @@
 
-export interface StudyContent {
-  text: string;
-  sourceType: 'pdf' | 'image' | 'text';
-  summary?: string;
-  keyPoints?: string[];
-  insights?: string;
-}
-
 export interface Question {
   question: string;
   options: string[];
@@ -14,24 +6,15 @@ export interface Question {
   explanation: string;
 }
 
-export interface CBTData {
-  questions: Question[];
-}
-
-export interface TestAttempt {
+export interface StudySession {
   id?: string;
   userId: string;
-  sourceType: string;
-  originalContentSnippet: string;
+  sourceType: 'pdf' | 'image' | 'text';
+  title: string;
   summary: string;
   keyPoints: string[];
-  questionCount: number;
+  insights: string;
   questions: Question[];
-  userAnswers: number[];
-  score: number;
-  totalMarks: number;
-  timeAllowed: number;
-  timeSpent: number;
   createdAt: number;
 }
 

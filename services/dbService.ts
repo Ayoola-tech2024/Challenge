@@ -1,37 +1,37 @@
 
 import { collection, addDoc, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
-import { TestAttempt } from "../types";
+import { StudySession } from "../types";
 
-export const saveTestAttempt = async (attempt: TestAttempt) => {
+export const saveStudySession = async (session: StudySession) => {
   try {
-    const docRef = await addDoc(collection(db, "testAttempts"), {
-      ...attempt,
+    const docRef = await addDoc(collection(db, "studySessions"), {
+      ...session,
       createdAt: Date.now()
     });
     return docRef.id;
   } catch (error) {
-    console.error("Error saving attempt:", error);
+    console.error("Error saving session:", error);
     throw error;
   }
 };
 
-export const getUserHistory = async (userId: string): Promise<TestAttempt[]> => {
+export const getStudyHistory = async (userId: string): Promise<StudySession[]> => {
   try {
     const q = query(
-      collection(db, "testAttempts"),
+      collection(db, "studySessions"),
       where("userId", "==", userId),
       orderBy("createdAt", "desc"),
-      limit(5)
+      limit(10)
     );
     const querySnapshot = await getDocs(q);
-    const history: TestAttempt[] = [];
+    const history: StudySession[] = [];
     querySnapshot.forEach((doc) => {
-      history.push({ id: doc.id, ...doc.data() } as TestAttempt);
+      history.push({ id: doc.id, ...doc.data() } as StudySession);
     });
     return history;
   } catch (error) {
-    console.error("Error fetching history:", error);
+    console.error("Error fetching study history:", error);
     return [];
   }
 };

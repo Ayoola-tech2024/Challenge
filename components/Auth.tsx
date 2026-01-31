@@ -4,7 +4,6 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   sendEmailVerification,
-  signOut,
   signInWithPopup
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
@@ -26,10 +25,9 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
     setLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      // Auth state change is handled in App.tsx
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError("Secure login failed. Please ensure popups are enabled for verification.");
+        setError("Secure login failed. Please ensure popups are enabled.");
       }
       setLoading(false);
     }
@@ -40,43 +38,49 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
     setError('');
     
     if (password.length < 8) {
-      setError("For your security, passwords must be at least 8 characters.");
+      setError("Security protocol requires a minimum of 8 characters.");
       return;
     }
 
     setLoading(true);
     try {
       if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        if (!userCredential.user.emailVerified) {
-          setError("Your identity hasn't been verified. Please check your email inbox.");
-          await signOut(auth);
-        }
+        // App.tsx handles the verification check after login
+        await signInWithEmailAndPassword(auth, email, password);
       } else {
+        // 1. Create the user identity
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // CRITICAL: Explicitly send verification link
-        await sendEmailVerification(userCredential.user);
-        setVerificationSent(true);
-        // Important: Log them out so they must verify before entering
-        await signOut(auth);
+        
+        // 2. Immediately dispatch the verification email
+        try {
+          await sendEmailVerification(userCredential.user);
+          setVerificationSent(true);
+        } catch (emailErr: any) {
+          console.error("Verification dispatch failed:", emailErr);
+          setError("Account created, but verification link failed to send. You can resend it from the next screen.");
+          // We don't block progress here because they can resend from the pending screen
+          setVerificationSent(true);
+        }
       }
     } catch (err: any) {
-      console.error("Auth System Error:", err.code);
+      console.error("Auth Failure:", err.code);
       switch (err.code) {
         case 'auth/email-already-in-use':
-          setError("This account already exists. Would you like to sign in instead?");
+          setError("Account identifier already exists in our neural network.");
           break;
         case 'auth/invalid-credential':
         case 'auth/wrong-password':
-          setError("Invalid security credentials. Please verify your email and password.");
+          setError("Credential mismatch. Please re-verify your identity.");
           break;
         case 'auth/too-many-requests':
-          setError("Too many attempts. Account locked temporarily for your protection.");
+          setError("System locked due to excessive failed attempts. Please standby.");
+          break;
+        case 'auth/invalid-email':
+          setError("Please provide a valid global identifier (email).");
           break;
         default:
-          setError("A secure connection could not be established. Please check your internet.");
+          setError("Uplink failed. Please verify your data connection.");
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -85,20 +89,20 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4 animate-in fade-in slide-in-from-bottom-8">
         <div className="w-full max-w-md p-10 liquid-glass ios-squircle text-center shadow-2xl">
-          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-pulse">
+          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-pulse shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-10 h-10">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
             </svg>
           </div>
-          <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Verification Link Sent</h2>
-          <p className="text-slate-600 mb-8 leading-relaxed">
-            We've dispatched a secure verification link to <span className="font-bold text-indigo-600">{email}</span>. Please verify your account to unlock ExamPro AI.
+          <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">Identity Dispatched</h2>
+          <p className="text-slate-600 mb-10 leading-relaxed font-medium">
+            A confirmation link is now in your inbox at <span className="font-bold text-indigo-600">{email}</span>. Click it to activate your operative status.
           </p>
           <button
-            onClick={() => { setVerificationSent(false); setIsLogin(true); }}
-            className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl transition-all shadow-xl shadow-indigo-200"
+            onClick={() => { setVerificationSent(false); setIsLogin(true); setError(''); }}
+            className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-3xl transition-all shadow-xl shadow-indigo-100"
           >
-            Back to Portal
+            Back to Portal Login
           </button>
         </div>
       </div>
@@ -121,9 +125,9 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
         
         <div className="text-center mb-10 pt-4">
           <h2 className="text-4xl font-black text-slate-900 mb-3 tracking-tighter">
-            {isLogin ? 'Sign In' : 'Create Account'}
+            {isLogin ? 'Sign In' : 'Create Identity'}
           </h2>
-          <p className="text-slate-500 font-semibold text-sm">
+          <p className="text-slate-500 font-bold text-sm">
             {isLogin ? 'Enter your credentials to continue' : 'Join the elite tier of scholars today'}
           </p>
         </div>
@@ -139,12 +143,12 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Global ID / Email</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Account Email</label>
             <input
               type="email"
               required
-              className="w-full px-6 py-5 rounded-3xl bg-white/40 border border-white/60 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold placeholder-slate-400 shadow-inner"
-              placeholder="alex@example.com"
+              className="w-full px-6 py-5 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner placeholder-slate-300"
+              placeholder="user@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -154,7 +158,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             <input
               type="password"
               required
-              className="w-full px-6 py-5 rounded-3xl bg-white/40 border border-white/60 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold placeholder-slate-400 shadow-inner"
+              className="w-full px-6 py-5 rounded-3xl bg-white/50 border border-white/60 focus:bg-white focus:ring-8 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-slate-800 font-bold shadow-inner placeholder-slate-300"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -165,7 +169,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             disabled={loading}
             className="w-full py-5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg rounded-[2rem] transition-all disabled:opacity-50 shadow-2xl shadow-indigo-300 active:scale-95"
           >
-            {loading ? 'Authenticating...' : (isLogin ? 'Enter Portal' : 'Register Identity')}
+            {loading ? 'Initializing...' : (isLogin ? 'Authorize Entry' : 'Register Identity')}
           </button>
         </form>
 
@@ -189,7 +193,7 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
           </svg>
-          Google Identity Sync
+          Google Identity
         </button>
 
         <div className="mt-10 text-center">
@@ -197,9 +201,9 @@ export const Auth: React.FC<AuthProps> = ({ onBack }) => {
             {isLogin ? "No identity yet?" : "Existing operative?"}{' '}
             <button
               onClick={() => { setIsLogin(!isLogin); setError(''); }}
-              className="text-indigo-600 hover:text-indigo-800 underline underline-offset-8 decoration-2"
+              className="text-indigo-600 hover:text-indigo-800 underline underline-offset-8 decoration-2 font-black transition-all"
             >
-              {isLogin ? 'Create Account' : 'Sign In'}
+              {isLogin ? 'Sign Up' : 'Sign In'}
             </button>
           </p>
         </div>

@@ -1,70 +1,48 @@
 
-import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+/**
+ * Sanitizes the response string by removing potential markdown code block wrappers.
+ */
+const sanitizeJsonResponse = (text: string): string => {
+  if (!text) return "";
+  // Removes ```json ... ``` and any leading/trailing whitespace
+  return text.replace(/```json\n?|```/g, '').trim();
+};
 
-export const summarizeAndAnalyze = async (text: string): Promise<{ summary: string, keyPoints: string[], insights: string }> => {
+export const analyzeStudyMaterial = async (text: string): Promise<{ 
+  summary: string, 
+  keyPoints: string[], 
+  insights: string, 
+  questions: any[] 
+}> => {
+  if (!process.env.API_KEY) {
+    throw new Error("System Error: AI credentials missing. Please refresh or contact admin.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Analyze the following study material. 
-    Provide a concise summary, a list of exactly 5 key bullet points, and a brief section on study insights (important concepts/definitions).
-    
-    Return in JSON format:
-    {
-      "summary": "...",
-      "keyPoints": ["...", "...", "...", "...", "..."],
-      "insights": "..."
-    }
-
-    Content:
-    ${text}`,
+    model: 'gemini-3-pro-preview',
+    contents: [{
+      role: 'user',
+      parts: [{
+        text: `Analyze this material and return a structured JSON report.
+        
+        INPUT MATERIAL:
+        ${text}`
+      }]
+    }],
     config: {
+      systemInstruction: "You are an Elite Academic Intelligence Agent. Extract the core summary, 5 key points, 1 deep insight, and 5 multiple choice questions. Format: JSON only. No prose. No conversational filler.",
       responseMimeType: "application/json",
+      thinkingConfig: { thinkingBudget: 0 },
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           summary: { type: Type.STRING },
           keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-          insights: { type: Type.STRING }
-        },
-        required: ["summary", "keyPoints", "insights"]
-      }
-    }
-  });
-
-  return JSON.parse(response.text || '{}');
-};
-
-export const generateCBT = async (text: string, questionCount: number): Promise<any> => {
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
-    contents: `Generate exactly ${questionCount} multiple-choice questions from the study content below.
-
-    Rules:
-    - Each question must have 4 options
-    - Only one correct answer
-    - Difficulty: medium (exam standard)
-    - No repeated or vague questions
-
-    Return JSON in this exact format:
-    {
-      "questions": [
-        {
-          "question": "",
-          "options": ["", "", "", ""],
-          "correctIndex": 0,
-          "explanation": ""
-        }
-      ]
-    }
-
-    Study Content:
-    ${text}`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
+          insights: { type: Type.STRING },
           questions: {
             type: Type.ARRAY,
             items: {
@@ -72,30 +50,49 @@ export const generateCBT = async (text: string, questionCount: number): Promise<
               properties: {
                 question: { type: Type.STRING },
                 options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                correctIndex: { type: Type.NUMBER },
+                correctIndex: { type: Type.INTEGER },
                 explanation: { type: Type.STRING }
               },
-              required: ["question", "options", "correctIndex", "explanation"]
+              required: ["question", "options", "correctIndex", "explanation"],
+              propertyOrdering: ["question", "options", "correctIndex", "explanation"]
             }
           }
         },
-        required: ["questions"]
+        required: ["summary", "keyPoints", "insights", "questions"],
+        propertyOrdering: ["summary", "keyPoints", "insights", "questions"]
       }
     }
   });
 
-  return JSON.parse(response.text || '{}');
+  const outputText = response.text;
+  if (!outputText) {
+    throw new Error("The Intelligence Core failed to synthesize a report. The content may be too short or complex.");
+  }
+
+  try {
+    const cleanJson = sanitizeJsonResponse(outputText);
+    return JSON.parse(cleanJson);
+  } catch (e) {
+    console.error("Critical JSON failure:", e, "Payload:", outputText);
+    throw new Error("Decoding Error: The system produced a non-standard report. Please retry.");
+  }
 };
 
 export const ocrImage = async (base64Data: string, mimeType: string): Promise<string> => {
+  if (!process.env.API_KEY) throw new Error("Credentials missing.");
+  
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: {
+    model: 'gemini-2.5-flash-image',
+    contents: [{
+      role: 'user',
       parts: [
         { inlineData: { data: base64Data, mimeType } },
-        { text: "Extract all legible text from this image as plain text. Do not summarize, just transcribe." }
+        { text: "Act as a high-precision OCR engine. Transcribe every word in this image exactly." }
       ]
-    }
+    }]
   });
+  
   return response.text || '';
 };
