@@ -54,7 +54,6 @@
       50% { transform: translateY(-10px); }
       100% { transform: translateY(0px); }
     }
-    /* Responsive tweaks for mobile buttons */
     @media (max-width: 640px) {
       .ios-squircle {
         border-radius: 1.5rem;
@@ -62,7 +61,8 @@
     }
   </style>
 <script>
-  window.process = window.process || { env: {} };
+  window.process = window.process || {};
+  window.process.env = window.process.env || {};
 </script>
 <script type="importmap">
 {

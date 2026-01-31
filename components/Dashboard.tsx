@@ -60,6 +60,13 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     setHistory(data);
   };
 
+  const handleKeySelectionError = async () => {
+    if (confirm("AI Core Identity Mismatch. Would you like to re-link your Project API Key?")) {
+      await (window as any).aistudio?.openSelectKey();
+      window.location.reload();
+    }
+  };
+
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     if (confirm("Permanently delete this study record?")) {
@@ -103,7 +110,13 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
       setUserChoices({});
       loadHistory();
     } catch (err: any) {
-      setError(err.message || "Intelligence Core Timeout.");
+      const msg = err.message || "";
+      if (msg.includes("API Key") || msg.includes("entity was not found")) {
+        setError("Neural connection rejected: Invalid or missing API Key.");
+        handleKeySelectionError();
+      } else {
+        setError(msg || "Intelligence Core Timeout.");
+      }
     } finally {
       setProcessing(false);
       setProcessStep('');
