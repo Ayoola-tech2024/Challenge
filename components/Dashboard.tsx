@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserProfile, StudySession } from '../types';
 import { analyzeStudyMaterial, ocrImage } from '../services/gemini';
@@ -121,28 +120,53 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
     await processText(cleanText, '', 'text');
   };
 
+  // Fixed handleFileUpload: Cast the result of Array.from to File[] to resolve 'unknown' type inference errors.
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length === 0) return;
+
+    if (files.length > 10) {
+      setError("Neural Overload: Max 10 files allowed per batch operation.");
+      return;
+    }
 
     setProcessing(true);
-    setProcessStep('Initializing Extraction Protocol...');
     setError(null);
+    
     try {
-      let text = "";
-      if (file.type === 'application/pdf') {
-        setProcessStep('Scanning Document Layers...');
-        text = await extractTextFromPDF(file);
-      } else if (file.type.startsWith('image/')) {
-        setProcessStep('Performing OCR Deep Scan...');
-        const base64 = await fileToBase64(file);
-        text = await ocrImage(base64, file.type);
-      } else {
-        throw new Error("Unsupported format. Use PDF or Images.");
+      let combinedText = "";
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const progressPrefix = files.length > 1 ? `[${i + 1}/${files.length}] ` : '';
+        
+        if (file.type === 'application/pdf') {
+          setProcessStep(`${progressPrefix}Scanning Document Layers...`);
+          const text = await extractTextFromPDF(file);
+          combinedText += `\n--- SOURCE: ${file.name} ---\n${text}\n`;
+        } else if (file.type.startsWith('image/')) {
+          setProcessStep(`${progressPrefix}Performing OCR Deep Scan...`);
+          const base64 = await fileToBase64(file);
+          const text = await ocrImage(base64, file.type);
+          combinedText += `\n--- SOURCE: ${file.name} ---\n${text}\n`;
+        } else {
+          console.warn(`Skipping unsupported file type: ${file.type}`);
+        }
       }
 
-      if (text.trim().length < 20) throw new Error("Extraction yielded insufficient data.");
-      await processText(text, file.name, file.type === 'application/pdf' ? 'pdf' : 'image');
+      const cleanCombined = combinedText.trim();
+      if (cleanCombined.length < 20) {
+        throw new Error("Extraction yielded insufficient data across all sources.");
+      }
+
+      const mainTitle = files.length > 1 
+        ? `Batch Study: ${files[0].name} + ${files.length - 1} more` 
+        : files[0].name;
+
+      await processText(
+        cleanCombined, 
+        mainTitle, 
+        files.some(f => f.type === 'application/pdf') ? 'pdf' : 'image'
+      );
     } catch (err: any) {
       setError(err.message || "Neural extraction failed.");
       setProcessing(false);
@@ -219,11 +243,12 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
               </button>
               <button 
                 onClick={() => setInputMode('file')}
-                className={`p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border-2 transition-all text-left ${inputMode === 'file' ? 'border-indigo-600 bg-white/60 shadow-2xl' : 'border-white/40 bg-white/20 hover:border-white/60'}`}
+                className={`p-6 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border-2 transition-all text-left relative overflow-hidden ${inputMode === 'file' ? 'border-indigo-600 bg-white/60 shadow-2xl' : 'border-white/40 bg-white/20 hover:border-white/60'}`}
               >
                 <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mb-6"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4.5v15m7.5-7.5h-15" /></svg></div>
                 <h3 className="font-black text-slate-800 text-lg md:text-xl">Deep Scan</h3>
                 <p className="text-[10px] text-slate-400 font-black mt-2 uppercase tracking-widest">Visual Document Protocol</p>
+                <span className="absolute top-4 right-4 bg-indigo-600 text-white text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Batch Enabled</span>
               </button>
             </div>
 
@@ -262,13 +287,13 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
             ) : (
               <div className="space-y-8">
                 <div className="border-4 border-dashed border-white/60 bg-white/10 rounded-[2rem] md:rounded-[3rem] p-12 md:p-20 text-center hover:border-indigo-400 hover:bg-white/30 transition-all cursor-pointer relative group">
-                  <input type="file" accept="application/pdf,image/*" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={processing} />
+                  <input type="file" multiple accept="application/pdf,image/*" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={processing} />
                   <div className="flex flex-col items-center">
                     <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl md:rounded-[2rem] shadow-2xl border border-white/60 flex items-center justify-center text-indigo-600 mb-6 group-hover:scale-110 transition-all">
                       <svg fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-8 h-8"><path d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     </div>
-                    <h3 className="text-xl md:text-2xl font-black text-slate-800">Uplink Source</h3>
-                    <p className="text-slate-400 font-black mt-3 uppercase text-[10px] tracking-[0.2em]">PDF / JPEG / PNG</p>
+                    <h3 className="text-xl md:text-2xl font-black text-slate-800">Uplink Source(s)</h3>
+                    <p className="text-slate-400 font-black mt-3 uppercase text-[10px] tracking-[0.2em]">Up to 10 PDF / JPEG / PNG</p>
                   </div>
                 </div>
                 {processing && (
@@ -287,7 +312,7 @@ export const Dashboard: React.FC<{ user: UserProfile }> = ({ user }) => {
                 <div className="space-y-8 md:space-y-10">
                    {[
                      { step: "01", text: "Select assessment intensity" },
-                     { step: "02", text: "Upload document or paste notes" },
+                     { step: "02", text: "Upload up to 10 files or paste notes" },
                      { step: "03", text: "AI distillates core knowledge" },
                      { step: "04", text: "Interactive CBT Matrix" }
                    ].map((s, i) => (
